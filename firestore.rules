@@ -1,0 +1,61 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net (Rule 1)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Common helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Rules for users collection
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isValidId(userId);
+    }
+
+    // Rules for suppliers collection
+    match /suppliers/{supplierId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isValidId(supplierId);
+    }
+
+    // Rules for cost_centers collection
+    match /cost_centers/{ccId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isValidId(ccId);
+    }
+
+    // Rules for units collection
+    match /units/{unitId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isValidId(unitId);
+    }
+
+    // Rules for processes collection
+    match /processes/{processId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isValidId(processId);
+    }
+
+    // Rules for daily_processes collection
+    match /daily_processes/{dpId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isValidId(dpId);
+    }
+
+    // Rules for audit_logs collection
+    match /audit_logs/{logId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isValidId(logId);
+    }
+  }
+}

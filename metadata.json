@@ -1,0 +1,6 @@
+{
+  "name": "Retencoes e Processos Contabeis",
+  "description": "Sistema para controle de processos contabeis e retencoes tributarias",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

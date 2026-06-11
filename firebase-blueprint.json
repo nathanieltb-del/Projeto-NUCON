@@ -1,0 +1,168 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User account in the system",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nome": { "type": "string" },
+        "email": { "type": "string" },
+        "login": { "type": "string" },
+        "senhaCriptografada": { "type": "string" },
+        "perfil": { "type": "string" },
+        "status": { "type": "string" },
+        "dataCriacao": { "type": "string" },
+        "ultimoAcesso": { "type": "string" }
+      },
+      "required": ["id", "nome", "login", "senhaCriptografada", "perfil", "status"]
+    },
+    "Supplier": {
+      "title": "Supplier",
+      "description": "Supplier register in the system",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nome": { "type": "string" },
+        "codigoMV": { "type": "string" },
+        "oficinaMV": { "type": "string" },
+        "codigoServico": { "type": "string" },
+        "cnpj": { "type": "string" },
+        "cprb": { "type": "boolean" },
+        "status": { "type": "string" },
+        "dataCriacao": { "type": "string" }
+      },
+      "required": ["id", "nome", "cnpj", "status"]
+    },
+    "CostCenter": {
+      "title": "CostCenter",
+      "description": "Cost center for financial tracking",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "descricao": { "type": "string" },
+        "status": { "type": "string" },
+        "dataCriacao": { "type": "string" }
+      },
+      "required": ["id", "descricao", "status"]
+    },
+    "Unit": {
+      "title": "Unit",
+      "description": "Operating business unit",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nome": { "type": "string" },
+        "status": { "type": "string" },
+        "dataCriacao": { "type": "string" }
+      },
+      "required": ["id", "nome", "status"]
+    },
+    "AccountingProcess": {
+      "title": "AccountingProcess",
+      "description": "Full accounting tax process",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "numeroSEI": { "type": "string" },
+        "fornecedorId": { "type": "string" },
+        "notaFiscal": { "type": "string" },
+        "contrato": { "type": "string" },
+        "competenciaServico": { "type": "string" },
+        "dataEmissao": { "type": "string" },
+        "dataAtesto": { "type": "string" },
+        "centroCustoId": { "type": "string" },
+        "unidadeId": { "type": "string" },
+        "valorNotaFiscal": { "type": "number" },
+        "deducoesINSS": { "type": "number" },
+        "baseCalculoCalculada": { "type": "number" },
+        "inssIncide": { "type": "boolean" },
+        "inssBase": { "type": "number" },
+        "inssAliquota": { "type": "number" },
+        "inssValor": { "type": "number" },
+        "irrfIncide": { "type": "boolean" },
+        "irrfBase": { "type": "number" },
+        "irrfAliquota": { "type": "number" },
+        "irrfValor": { "type": "number" },
+        "csrfIncide": { "type": "boolean" },
+        "csrfBase": { "type": "number" },
+        "csrfAliquota": { "type": "number" },
+        "csrfValor": { "type": "number" },
+        "issIncide": { "type": "boolean" },
+        "issBase": { "type": "number" },
+        "issAliquota": { "type": "number" },
+        "issValor": { "type": "number" },
+        "valorLiquido": { "type": "number" },
+        "descricaoServicos": { "type": "string" },
+        "status": { "type": "string" },
+        "criadoPor": { "type": "string" },
+        "criadoPorId": { "type": "string" },
+        "dataCriacao": { "type": "string" }
+      },
+      "required": ["id", "numeroSEI", "fornecedorId", "notaFiscal", "valorNotaFiscal", "status"]
+    },
+    "DailyProcess": {
+      "title": "DailyProcess",
+      "description": "Daily process checklist entry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "numeroSEI": { "type": "string" },
+        "fornecedorId": { "type": "string" },
+        "colaboradorId": { "type": "string" },
+        "dataEncaminhadoFinanceiro": { "type": "string" },
+        "dataCriacao": { "type": "string" },
+        "criadoPorId": { "type": "string" }
+      },
+      "required": ["id", "numeroSEI", "fornecedorId", "colaboradorId"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "System usage audit log entry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "usuarioId": { "type": "string" },
+        "usuarioNome": { "type": "string" },
+        "usuarioLogin": { "type": "string" },
+        "perfil": { "type": "string" },
+        "dataHora": { "type": "string" },
+        "operacao": { "type": "string" },
+        "detalhes": { "type": "string" },
+        "valoresAnteriores": { "type": "string" },
+        "valoresNovos": { "type": "string" }
+      },
+      "required": ["id", "usuarioId", "usuarioNome", "operacao", "dataHora"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Users of the system"
+    },
+    "/suppliers/{supplierId}": {
+      "schema": "Supplier",
+      "description": "Registered suppliers"
+    },
+    "/cost_centers/{ccId}": {
+      "schema": "CostCenter",
+      "description": "List of cost center codes and descriptions"
+    },
+    "/units/{unitId}": {
+      "schema": "Unit",
+      "description": "Operational Hospital/UPA units"
+    },
+    "/processes/{processId}": {
+      "schema": "AccountingProcess",
+      "description": "Accounting processes and tax calculation data"
+    },
+    "/daily_processes/{dpId}": {
+      "schema": "DailyProcess",
+      "description": "Daily control workflow of processes"
+    },
+    "/audit_logs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Chronological audit logs for user compliance"
+    }
+  }
+}
