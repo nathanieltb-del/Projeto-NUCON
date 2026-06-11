@@ -24,20 +24,9 @@ interface ProcessesProps {
 
 export default function ProcessesView({ currentUserProfile }: ProcessesProps) {
   const [processes, setProcesses] = useState<AccountingProcess[]>(() => DBService.getProcesses());
-  const [suppliers, setSuppliers] = useState<Supplier[]>(() => DBService.getSuppliers().filter(s => s.status === 'Ativo'));
-  const [costCenters, setCostCenters] = useState<CostCenter[]>(() => DBService.getCostCenters().filter(cc => cc.status === 'Ativo'));
-  const [units, setUnits] = useState<Unit[]>(() => DBService.getUnits().filter(u => u.status === 'Ativo'));
-
-  // Sincronização em tempo real via Firestore / DBService
-  useEffect(() => {
-    const unsubscribe = DBService.subscribe(() => {
-      setProcesses(DBService.getProcesses());
-      setSuppliers(DBService.getSuppliers().filter(s => s.status === 'Ativo'));
-      setCostCenters(DBService.getCostCenters().filter(cc => cc.status === 'Ativo'));
-      setUnits(DBService.getUnits().filter(u => u.status === 'Ativo'));
-    });
-    return unsubscribe;
-  }, []);
+  const [suppliers] = useState<Supplier[]>(() => DBService.getSuppliers().filter(s => s.status === 'Ativo'));
+  const [costCenters] = useState<CostCenter[]>(() => DBService.getCostCenters().filter(cc => cc.status === 'Ativo'));
+  const [units] = useState<Unit[]>(() => DBService.getUnits().filter(u => u.status === 'Ativo'));
 
   // Filtros de pesquisa
   const [filterSEI, setFilterSEI] = useState('');

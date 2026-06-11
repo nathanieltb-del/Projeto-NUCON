@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { DBService } from '../services/db';
 import { Unit, UserProfile } from '../types';
 import { Search, PlusCircle, AlertTriangle, Check, Settings, Edit, Trash2 } from 'lucide-react';
@@ -16,14 +16,6 @@ export default function UnitsView({ currentUserProfile }: UnitsProps) {
   const [items, setItems] = useState<Unit[]>(() => DBService.getUnits());
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('todos');
-
-  // Real-time synchronization subscription
-  useEffect(() => {
-    const unsubscribe = DBService.subscribe(() => {
-      setItems(DBService.getUnits());
-    });
-    return unsubscribe;
-  }, []);
   const [showAddForm, setShowAddForm] = useState(false);
 
   // Form

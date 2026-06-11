@@ -3,38 +3,21 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect } from 'react';
 import { DBService } from './services/db';
 import { User, UserProfile } from './types';
+import LoginView from './components/LoginView';
 import Sidebar from './components/Sidebar';
+import DashboardView from './components/DashboardView';
+import ProcessesView from './components/ProcessesView';
+import SuppliersView from './components/SuppliersView';
+import CostCentersView from './components/CostCentersView';
+import UnitsView from './components/UnitsView';
+import ImportExportView from './components/ImportExportView';
+import AuditView from './components/AuditView';
+import UsersView from './components/UsersView';
+import DailyControlView from './components/DailyControlView';
 import { Layout } from 'lucide-react';
-
-// Lazy loading das views principais para code-splitting e otimização de performance
-const LoginView = lazy(() => import('./components/LoginView'));
-const DashboardView = lazy(() => import('./components/DashboardView'));
-const ProcessesView = lazy(() => import('./components/ProcessesView'));
-const SuppliersView = lazy(() => import('./components/SuppliersView'));
-const CostCentersView = lazy(() => import('./components/CostCentersView'));
-const UnitsView = lazy(() => import('./components/UnitsView'));
-const ImportExportView = lazy(() => import('./components/ImportExportView'));
-const AuditView = lazy(() => import('./components/AuditView'));
-const UsersView = lazy(() => import('./components/UsersView'));
-const DailyControlView = lazy(() => import('./components/DailyControlView'));
-
-// Componente de carregamento elegante e moderno para a transição dos módulos
-function LoadingView() {
-  return (
-    <div className="flex flex-col items-center justify-center h-full min-h-[400px] w-full gap-4 transition-colors duration-200">
-      <div className="relative flex items-center justify-center">
-        {/* Spinner animado com gradiente */}
-        <div className="h-12 w-12 rounded-full border-4 border-slate-200 dark:border-slate-800 border-t-indigo-600 dark:border-t-indigo-500 animate-spin" />
-      </div>
-      <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 tracking-wide animate-pulse">
-        Carregando módulo...
-      </p>
-    </div>
-  );
-}
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -80,11 +63,7 @@ export default function App() {
   };
 
   if (!currentUser) {
-    return (
-      <Suspense fallback={<LoadingView />}>
-        <LoginView onLoginSuccess={handleLoginSuccess} />
-      </Suspense>
-    );
+    return <LoginView onLoginSuccess={handleLoginSuccess} />;
   }
 
   // Renderização dinâmica baseada no Perfil de Acesso do usuário e Tab Selecionada
@@ -146,9 +125,7 @@ export default function App() {
           )}
 
           {/* Renderização da View Principal */}
-          <Suspense fallback={<LoadingView />}>
-            {renderCurrentView()}
-          </Suspense>
+          {renderCurrentView()}
           
         </main>
 

@@ -7,80 +7,8 @@ import {
   User, UserProfile, Supplier, CostCenter, Unit, 
   AccountingProcess, AuditLog, TaxBaseOption, DailyProcess 
 } from '../types';
-import { db, auth } from './firebase';
-import { onAuthStateChanged } from 'firebase/auth';
-import { 
-  collection, doc, setDoc, deleteDoc, onSnapshot 
-} from 'firebase/firestore';
 
-enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
-
-interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId?: string | null;
-    email?: string | null;
-    emailVerified?: boolean | null;
-    isAnonymous?: boolean | null;
-    tenantId?: string | null;
-    providerInfo?: {
-      providerId?: string | null;
-      email?: string | null;
-    }[];
-  };
-}
-
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData?.map(provider => ({
-        providerId: provider.providerId,
-        email: provider.email,
-      })) || []
-    },
-    operationType,
-    path
-  };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
-}
-
-// Recursively removes undefined fields from an object so Firestore doesn't throw a serialization error
-function removeUndefinedFields<T>(obj: T): T {
-  if (obj === null || obj === undefined) return obj;
-  if (Array.isArray(obj)) {
-    return obj.map(removeUndefinedFields) as unknown as T;
-  }
-  if (typeof obj === 'object') {
-    const clean: any = {};
-    for (const key in obj) {
-      if (Object.prototype.hasOwnProperty.call(obj, key)) {
-        if (obj[key] !== undefined) {
-          clean[key] = removeUndefinedFields(obj[key]);
-        }
-      }
-    }
-    return clean as T;
-  }
-  return obj;
-}
-
-// Chaves para o LocalStorage de cache
+// Chaves para o LocalStorage
 const STORAGE_KEYS = {
   USERS: 'retencoes_users',
   SUPPLIERS: 'retencoes_suppliers',
@@ -114,13 +42,14 @@ const DEFAULT_DAILY_PROCESSES: DailyProcess[] = [
   }
 ];
 
+// Dados semente (Seed Data) padrão
 const DEFAULT_USERS: User[] = [
   {
     id: 'u1',
     nome: 'Carlos Souza (Administrador)',
     email: 'carlos.souza@empresa.com',
     login: 'admin',
-    senhaCriptografada: 'admin123',
+    senhaCriptografada: 'admin123', // Em produção seria hash, aqui mantemos legível para fins do protótipo/ERP
     perfil: UserProfile.ADMINISTRADOR,
     status: 'Ativo',
     dataCriacao: new Date('2026-01-10T10:00:00Z').toISOString()
@@ -171,7 +100,7 @@ const DEFAULT_SUPPLIERS: Supplier[] = [
     oficinaMV: 'OF-HIGIENIZACAO',
     codigoServico: '07.01',
     cnpj: '12.345.678/0001-90',
-    cprb: false,
+    cprb: false, // Não optante CPRB
     inss: { incide: true, aliquota: 11, baseCalculoPadrao: TaxBaseOption.VALOR_NF_DEDUCOES },
     irrf: { incide: true, aliquota: 1.5, baseCalculoPadrao: TaxBaseOption.VALOR_NF },
     csrf: { incide: true, aliquota: 4.65, baseCalculoPadrao: TaxBaseOption.VALOR_NF },
@@ -186,8 +115,8 @@ const DEFAULT_SUPPLIERS: Supplier[] = [
     oficinaMV: 'OF-MANUT_EQUIP',
     codigoServico: '14.01',
     cnpj: '98.765.432/0001-21',
-    cprb: true,
-    inss: { incide: true, aliquota: 3.5, baseCalculoPadrao: TaxBaseOption.VALOR_NF },
+    cprb: true, // Sim, optante CPRB (alíquota CPRB diferenciada, INSS calculado como 3.5%)
+    inss: { incide: true, aliquota: 3.5, baseCalculoPadrao: TaxBaseOption.VALOR_NF }, // Alíquota especial CPRB
     irrf: { incide: true, aliquota: 1.5, baseCalculoPadrao: TaxBaseOption.VALOR_NF },
     csrf: { incide: true, aliquota: 4.65, baseCalculoPadrao: TaxBaseOption.VALOR_NF },
     iss: { incide: false, aliquota: 0, baseCalculoPadrao: TaxBaseOption.VALOR_NF },
@@ -236,19 +165,19 @@ const DEFAULT_PROCESSES: AccountingProcess[] = [
     competenciaServico: '2026-05',
     dataEmissao: '2026-05-20',
     dataAtesto: '2026-05-22',
-    centroCustoId: '50103',
-    unidadeId: 'HMG-01',
+    centroCustoId: '50103', // Serviço de Limpeza
+    unidadeId: 'HMG-01', // Hospital Metropolitano
     valorNotaFiscal: 50000.00,
     deducoesINSS: 5000.00,
     baseCalculoCalculada: 45000.00,
     
     inssIncide: true,
-    inssBase: 45000.00,
+    inssBase: 45000.00, // Valor da NF menos deduções
     inssAliquota: 11,
     inssValor: 4950.00,
     
     irrfIncide: true,
-    irrfBase: 50000.00,
+    irrfBase: 50000.00, // Valor da NF
     irrfAliquota: 1.5,
     irrfValor: 750.00,
     
@@ -262,7 +191,7 @@ const DEFAULT_PROCESSES: AccountingProcess[] = [
     issAliquota: 5,
     issValor: 2500.00,
     
-    valorLiquido: 34475.00,
+    valorLiquido: 34475.00, // 45000 - 4950 - 750 - 2325 - 2500
     descricaoServicos: 'Prestação de serviços de higienização, desinfecção hospitalar e limpeza de áreas críticas, referente ao período de 01 a 31 de maio de 2026.',
     status: 'Processado',
     criadoPor: 'Mariana Silva (Operadora)',
@@ -278,14 +207,14 @@ const DEFAULT_PROCESSES: AccountingProcess[] = [
     competenciaServico: '2026-05',
     dataEmissao: '2026-05-18',
     dataAtesto: '2026-05-20',
-    centroCustoId: '30405',
+    centroCustoId: '30405', // Tecnologia da Informação
     unidadeId: 'UPA-LESTE',
     valorNotaFiscal: 15000.00,
     deducoesINSS: 0.00,
     baseCalculoCalculada: 15000.00,
     
     inssIncide: true,
-    inssBase: 15000.00,
+    inssBase: 15000.00, // CPRB = SIM -> Alíquota 3.5%
     inssAliquota: 3.5,
     inssValor: 525.00,
     
@@ -304,12 +233,54 @@ const DEFAULT_PROCESSES: AccountingProcess[] = [
     issAliquota: 0,
     issValor: 0.00,
     
-    valorLiquido: 13552.50,
+    valorLiquido: 13552.50, // 15000 - 525 - 225 - 697.50
     descricaoServicos: 'Manutenção preventiva e corretiva de equipamentos de diagnóstico por imagem e ultrassom, conforme contrato anual.',
     status: 'Processado',
     criadoPor: 'Carlos Souza (Administrador)',
     criadoPorId: 'u1',
     dataCriacao: new Date('2026-05-21T11:15:00Z').toISOString()
+  },
+  {
+    id: 'p3',
+    numeroSEI: '22110-44556677/2026-03',
+    fornecedorId: 's3',
+    notaFiscal: '10982',
+    contrato: 'CT-2026/001',
+    competenciaServico: '2026-06',
+    dataEmissao: '2026-06-02',
+    dataAtesto: '2026-06-05',
+    centroCustoId: '20101', // Manutenção Predial
+    unidadeId: 'HMG-01',
+    valorNotaFiscal: 8500.00,
+    deducoesINSS: 0.00,
+    baseCalculoCalculada: 8500.00,
+    
+    inssIncide: true,
+    inssBase: 8500.00,
+    inssAliquota: 11,
+    inssValor: 935.00,
+    
+    irrfIncide: true,
+    irrfBase: 8500.00,
+    irrfAliquota: 1.0,
+    irrfValor: 85.00,
+    
+    csrfIncide: true,
+    csrfBase: 8500.00,
+    csrfAliquota: 4.65,
+    csrfValor: 395.25,
+    
+    issIncide: true,
+    issBase: 8500.00,
+    issAliquota: 3,
+    issValor: 255.00,
+    
+    valorLiquido: 6829.75,
+    descricaoServicos: 'Monitoramento remoto de segurança e vigilância de portaria e recepção principal do Hospital Metropolitano.',
+    status: 'Pendente',
+    criadoPor: 'Mariana Silva (Operadora)',
+    criadoPorId: 'u2',
+    dataCriacao: new Date('2026-06-06T14:40:00Z').toISOString()
   }
 ];
 
@@ -322,34 +293,11 @@ const DEFAULT_LOGS: AuditLog[] = [
     perfil: UserProfile.ADMINISTRADOR,
     dataHora: new Date('2026-05-20T08:00:00Z').toISOString(),
     operacao: 'Semente do Sistema',
-    detalhes: 'Base de dados inicial configurada e sincronizada na nuvem com parâmetros tributários.'
+    detalhes: 'Base de dados inicial configurada com parâmetros tributários padrão brasileiros.'
   }
 ];
 
-type Listener = () => void;
-
 export class DBService {
-  private static listeners = new Set<Listener>();
-  private static isSynced = false;
-
-  // Registra um componente para receber notificações de atualizações
-  public static subscribe(listener: Listener): () => void {
-    this.listeners.add(listener);
-    return () => {
-      this.listeners.delete(listener);
-    };
-  }
-
-  public static notifyListeners(): void {
-    this.listeners.forEach(l => {
-      try {
-        l();
-      } catch (e) {
-        console.error('Error triggering database listener:', e);
-      }
-    });
-  }
-
   private static get<T>(key: string, defaultVal: T): T {
     const val = localStorage.getItem(key);
     if (!val) {
@@ -367,58 +315,33 @@ export class DBService {
     localStorage.setItem(key, JSON.stringify(data));
   }
 
-  // Sincronizador genérico de coleções com o Firestore
-  private static syncCollection<T>(
-    colName: string,
-    storageKey: string,
-    defaultData: T[]
-  ): void {
-    onSnapshot(
-      collection(db, colName),
-      (snapshot) => {
-        if (snapshot.empty) {
-          // Se o banco na nuvem estiver vazio, semeia os dados iniciais
-          defaultData.forEach((item: any) => {
-            setDoc(doc(db, colName, item.id), item).catch((err) => {
-              console.error(`Erro ao semear ${colName}:`, err);
-            });
-          });
-        } else {
-          // Extrai e armazena na memória local caches
-          const list: T[] = [];
-          snapshot.forEach((d) => {
-            list.push(d.data() as T);
-          });
-          localStorage.setItem(storageKey, JSON.stringify(list));
-          this.notifyListeners();
-        }
-      },
-      (error) => {
-        handleFirestoreError(error, OperationType.GET, colName);
-      }
-    );
-  }
-
-  // Inicializa e subscreve os canais de Sincronização em Tempo Real
+  // Inicializa a persistência local
   public static init(): void {
-    // Garante login inicial no localStorage do cliente se vazio
+    if (!localStorage.getItem(STORAGE_KEYS.USERS)) {
+      this.set(STORAGE_KEYS.USERS, DEFAULT_USERS);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.SUPPLIERS)) {
+      this.set(STORAGE_KEYS.SUPPLIERS, DEFAULT_SUPPLIERS);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.COST_CENTERS)) {
+      this.set(STORAGE_KEYS.COST_CENTERS, DEFAULT_COST_CENTERS);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.UNITS)) {
+      this.set(STORAGE_KEYS.UNITS, DEFAULT_UNITS);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.PROCESSES)) {
+      this.set(STORAGE_KEYS.PROCESSES, DEFAULT_PROCESSES);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.DAILY_PROCESSES)) {
+      this.set(STORAGE_KEYS.DAILY_PROCESSES, DEFAULT_DAILY_PROCESSES);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.AUDIT_LOGS)) {
+      this.set(STORAGE_KEYS.AUDIT_LOGS, DEFAULT_LOGS);
+    }
     if (!localStorage.getItem(STORAGE_KEYS.CURRENT_USER)) {
+      // Login padrão de demonstração de administrador
       this.set(STORAGE_KEYS.CURRENT_USER, DEFAULT_USERS[0]);
     }
-
-    onAuthStateChanged(auth, (user) => {
-      if (user && !this.isSynced) {
-        this.isSynced = true;
-        // Inscreve ouvintes de snapshots em tempo real do Firestore para cada módulo
-        this.syncCollection<User>('users', STORAGE_KEYS.USERS, DEFAULT_USERS);
-        this.syncCollection<Supplier>('suppliers', STORAGE_KEYS.SUPPLIERS, DEFAULT_SUPPLIERS);
-        this.syncCollection<CostCenter>('cost_centers', STORAGE_KEYS.COST_CENTERS, DEFAULT_COST_CENTERS);
-        this.syncCollection<Unit>('units', STORAGE_KEYS.UNITS, DEFAULT_UNITS);
-        this.syncCollection<AccountingProcess>('processes', STORAGE_KEYS.PROCESSES, DEFAULT_PROCESSES);
-        this.syncCollection<DailyProcess>('daily_processes', STORAGE_KEYS.DAILY_PROCESSES, DEFAULT_DAILY_PROCESSES);
-        this.syncCollection<AuditLog>('audit_logs', STORAGE_KEYS.AUDIT_LOGS, DEFAULT_LOGS);
-      }
-    });
   }
 
   // MULTIUSER & AUTH
@@ -428,11 +351,6 @@ export class DBService {
 
   public static saveUsers(users: User[]): void {
     this.set(STORAGE_KEYS.USERS, users);
-    // Persiste também no Firestore individualmente
-    users.forEach(u => {
-      setDoc(doc(db, 'users', u.id), u)
-        .catch(err => handleFirestoreError(err, OperationType.WRITE, `users/${u.id}`));
-    });
   }
 
   public static getCurrentUser(): User | null {
@@ -441,18 +359,12 @@ export class DBService {
 
   public static setCurrentUser(user: User | null): void {
     if (user) {
+      // Atualiza o último acesso
       const updatedUser = { ...user, ultimoAcesso: new Date().toISOString() };
-      
-      // Atualiza no cache e no Firestore
       const allUsers = this.getUsers().map(u => u.id === user.id ? updatedUser : u);
-      this.set(STORAGE_KEYS.USERS, allUsers);
+      this.saveUsers(allUsers);
       this.set(STORAGE_KEYS.CURRENT_USER, updatedUser);
-
-      setDoc(doc(db, 'users', user.id), updatedUser)
-        .then(() => {
-          this.addAuditLog('Login', `Início de sessão efetuado com sucesso por ${user.nome}.`, '', JSON.stringify(updatedUser));
-        })
-        .catch(err => handleFirestoreError(err, OperationType.WRITE, `users/${user.id}`));
+      this.addAuditLog('Login', `Início de sessão efetuado com sucesso por ${user.nome}.`, '', JSON.stringify(updatedUser));
     } else {
       const currentUser = this.getCurrentUser();
       if (currentUser) {
@@ -463,55 +375,52 @@ export class DBService {
   }
 
   public static addUser(user: Omit<User, 'id' | 'dataCriacao'>): User {
+    const users = this.getUsers();
     const newUser: User = {
       ...user,
       id: 'u_' + Math.random().toString(36).substr(2, 9),
       dataCriacao: new Date().toISOString()
     };
-
-    setDoc(doc(db, 'users', newUser.id), newUser)
-      .then(() => {
-        this.addAuditLog('Criação de Usuário', `Cadastrou o usuário ${newUser.nome} (${newUser.perfil}).`, '', JSON.stringify(newUser));
-      })
-      .catch(err => handleFirestoreError(err, OperationType.CREATE, `users/${newUser.id}`));
-
+    users.push(newUser);
+    this.saveUsers(users);
+    this.addAuditLog('Criação de Usuário', `Cadastrou o usuário ${newUser.nome} (${newUser.perfil}).`, '', JSON.stringify(newUser));
     return newUser;
   }
 
   public static updateUser(id: string, updatedFields: Partial<Omit<User, 'id' | 'dataCriacao'>>): User {
     const users = this.getUsers();
     const oldUser = users.find(u => u.id === id);
-    const updatedUser = { ...oldUser, ...updatedFields, id } as User;
-
-    setDoc(doc(db, 'users', id), updatedUser)
-      .then(() => {
-        this.addAuditLog(
-          'Atualização de Usuário', 
-          `Atualizou o usuário ${updatedUser.nome}.`, 
-          JSON.stringify(oldUser), 
-          JSON.stringify(updatedUser)
-        );
-      })
-      .catch(err => handleFirestoreError(err, OperationType.UPDATE, `users/${id}`));
+    const updatedUser = users.map(u => {
+      if (u.id === id) {
+        return { ...u, ...updatedFields } as User;
+      }
+      return u;
+    });
+    this.saveUsers(updatedUser);
+    const result = updatedUser.find(u => u.id === id)!;
+    this.addAuditLog(
+      'Atualização de Usuário', 
+      `Atualizou o usuário ${result.nome}.`, 
+      JSON.stringify(oldUser), 
+      JSON.stringify(result)
+    );
     
+    // Se for o usuário corrente, atualiza ele localmente também
     const curr = this.getCurrentUser();
     if (curr && curr.id === id) {
-      this.set(STORAGE_KEYS.CURRENT_USER, updatedUser);
+      this.set(STORAGE_KEYS.CURRENT_USER, result);
     }
 
-    return updatedUser;
+    return result;
   }
 
   public static deleteUser(id: string): void {
     const users = this.getUsers();
     const keyUser = users.find(u => u.id === id);
     if (!keyUser) return;
-
-    deleteDoc(doc(db, 'users', id))
-      .then(() => {
-        this.addAuditLog('Remoção de Usuário', `Removeu definitivamente o usuário ${keyUser.nome} (${keyUser.perfil}).`, JSON.stringify(keyUser), '');
-      })
-      .catch(err => handleFirestoreError(err, OperationType.DELETE, `users/${id}`));
+    const filtered = users.filter(u => u.id !== id);
+    this.saveUsers(filtered);
+    this.addAuditLog('Remoção de Usuário', `Removeu definitivamente o usuário ${keyUser.nome} (${keyUser.perfil}).`, JSON.stringify(keyUser), '');
   }
 
   // SUPPPLIERS / FORNECEDORES
@@ -521,44 +430,38 @@ export class DBService {
 
   public static saveSuppliers(suppliers: Supplier[]): void {
     this.set(STORAGE_KEYS.SUPPLIERS, suppliers);
-    suppliers.forEach(s => {
-      setDoc(doc(db, 'suppliers', s.id), s)
-        .catch(err => handleFirestoreError(err, OperationType.WRITE, `suppliers/${s.id}`));
-    });
   }
 
   public static addSupplier(supplier: Omit<Supplier, 'id' | 'dataCriacao'>): Supplier {
+    const suppliers = this.getSuppliers();
     const newSupplier: Supplier = {
       ...supplier,
       id: 's_' + Math.random().toString(36).substr(2, 9),
       dataCriacao: new Date().toISOString()
     };
-
-    setDoc(doc(db, 'suppliers', newSupplier.id), newSupplier)
-      .then(() => {
-        this.addAuditLog('Acréscimo de Fornecedor', `Cadastrou o fornecedor ${newSupplier.nome} (CNPJ: ${newSupplier.cnpj}).`, '', JSON.stringify(newSupplier));
-      })
-      .catch(err => handleFirestoreError(err, OperationType.CREATE, `suppliers/${newSupplier.id}`));
-
+    suppliers.push(newSupplier);
+    this.saveSuppliers(suppliers);
+    this.addAuditLog('Acréscimo de Fornecedor', `Cadastrou o fornecedor ${newSupplier.nome} (CNPJ: ${newSupplier.cnpj}).`, '', JSON.stringify(newSupplier));
     return newSupplier;
   }
 
   public static updateSupplier(id: string, updatedFields: Partial<Omit<Supplier, 'id' | 'dataCriacao'>>): Supplier {
     const suppliers = this.getSuppliers();
     const oldSupp = suppliers.find(s => s.id === id);
-    const result = { ...oldSupp, ...updatedFields, id } as Supplier;
-
-    setDoc(doc(db, 'suppliers', id), result)
-      .then(() => {
-        this.addAuditLog(
-          'Atualização de Fornecedor', 
-          `Atualizou parâmetros tributários do fornecedor ${result.nome}.`, 
-          JSON.stringify(oldSupp), 
-          JSON.stringify(result)
-        );
-      })
-      .catch(err => handleFirestoreError(err, OperationType.UPDATE, `suppliers/${id}`));
-
+    const updated = suppliers.map(s => {
+      if (s.id === id) {
+        return { ...s, ...updatedFields } as Supplier;
+      }
+      return s;
+    });
+    this.saveSuppliers(updated);
+    const result = updated.find(s => s.id === id)!;
+    this.addAuditLog(
+      'Atualização de Fornecedor', 
+      `Atualizou parâmetros tributários do fornecedor ${result.nome}.`, 
+      JSON.stringify(oldSupp), 
+      JSON.stringify(result)
+    );
     return result;
   }
 
@@ -566,12 +469,9 @@ export class DBService {
     const suppliers = this.getSuppliers();
     const keySupplier = suppliers.find(s => s.id === id);
     if (!keySupplier) return;
-
-    deleteDoc(doc(db, 'suppliers', id))
-      .then(() => {
-        this.addAuditLog('Remoção de Fornecedor', `Removeu definitivamente o fornecedor ${keySupplier.nome}, CNPJ: ${keySupplier.cnpj}.`, JSON.stringify(keySupplier), '');
-      })
-      .catch(err => handleFirestoreError(err, OperationType.DELETE, `suppliers/${id}`));
+    const filtered = suppliers.filter(s => s.id !== id);
+    this.saveSuppliers(filtered);
+    this.addAuditLog('Remoção de Fornecedor', `Removeu definitivamente o fornecedor ${keySupplier.nome}, CNPJ: ${keySupplier.cnpj}.`, JSON.stringify(keySupplier), '');
   }
 
   // COST CENTERS / CENTROS DE CUSTO
@@ -580,31 +480,29 @@ export class DBService {
   }
 
   public static addCostCenter(cc: Omit<CostCenter, 'dataCriacao'>): CostCenter {
+    const items = this.getCostCenters();
     const newCC: CostCenter = {
       ...cc,
       dataCriacao: new Date().toISOString()
     };
-
-    setDoc(doc(db, 'cost_centers', newCC.id), newCC)
-      .then(() => {
-        this.addAuditLog('Criação de Centro de Custo', `Cadastrou o Centro de Custo código ${cc.id} - ${cc.descricao}.`, '', JSON.stringify(newCC));
-      })
-      .catch(err => handleFirestoreError(err, OperationType.CREATE, `cost_centers/${newCC.id}`));
-
+    items.push(newCC);
+    this.set(STORAGE_KEYS.COST_CENTERS, items);
+    this.addAuditLog('Criação de Centro de Custo', `Cadastrou o Centro de Custo código ${cc.id} - ${cc.descricao}.`, '', JSON.stringify(newCC));
     return newCC;
   }
 
   public static updateCostCenter(id: string, updated: Partial<Omit<CostCenter, 'id' | 'dataCriacao'>>): CostCenter {
     const items = this.getCostCenters();
     const old = items.find(i => i.id === id);
-    const result = { ...old, ...updated, id } as CostCenter;
-
-    setDoc(doc(db, 'cost_centers', id), result)
-      .then(() => {
-        this.addAuditLog('Alteração Centro de Custo', `Alterou o Centro de Custo ${id}.`, JSON.stringify(old), JSON.stringify(result));
-      })
-      .catch(err => handleFirestoreError(err, OperationType.UPDATE, `cost_centers/${id}`));
-
+    const updatedItems = items.map(i => {
+      if (i.id === id) {
+        return { ...i, ...updated };
+      }
+      return i;
+    });
+    this.set(STORAGE_KEYS.COST_CENTERS, updatedItems);
+    const result = updatedItems.find(i => i.id === id)!;
+    this.addAuditLog('Alteração Centro de Custo', `Alterou o Centro de Custo ${id}.`, JSON.stringify(old), JSON.stringify(result));
     return result;
   }
 
@@ -612,12 +510,9 @@ export class DBService {
     const items = this.getCostCenters();
     const keyCC = items.find(i => i.id === id);
     if (!keyCC) return;
-
-    deleteDoc(doc(db, 'cost_centers', id))
-      .then(() => {
-        this.addAuditLog('Remoção de Centro de Custo', `Removeu o Centro de Custo código ${keyCC.id} - ${keyCC.descricao}.`, JSON.stringify(keyCC), '');
-      })
-      .catch(err => handleFirestoreError(err, OperationType.DELETE, `cost_centers/${id}`));
+    const filtered = items.filter(i => i.id !== id);
+    this.set(STORAGE_KEYS.COST_CENTERS, filtered);
+    this.addAuditLog('Remoção de Centro de Custo', `Removeu o Centro de Custo código ${keyCC.id} - ${keyCC.descricao}.`, JSON.stringify(keyCC), '');
   }
 
   // UNITS / UNIDADES
@@ -626,31 +521,29 @@ export class DBService {
   }
 
   public static addUnit(unit: Omit<Unit, 'dataCriacao'>): Unit {
+    const items = this.getUnits();
     const newUnit: Unit = {
       ...unit,
       dataCriacao: new Date().toISOString()
     };
-
-    setDoc(doc(db, 'units', newUnit.id), newUnit)
-      .then(() => {
-        this.addAuditLog('Criação de Unidade MV', `Cadastrou a Unidade ${unit.id} - ${unit.nome}.`, '', JSON.stringify(newUnit));
-      })
-      .catch(err => handleFirestoreError(err, OperationType.CREATE, `units/${newUnit.id}`));
-
+    items.push(newUnit);
+    this.set(STORAGE_KEYS.UNITS, items);
+    this.addAuditLog('Criação de Unidade MV', `Cadastrou a Unidade ${unit.id} - ${unit.nome}.`, '', JSON.stringify(newUnit));
     return newUnit;
   }
 
   public static updateUnit(id: string, updated: Partial<Omit<Unit, 'id' | 'dataCriacao'>>): Unit {
     const items = this.getUnits();
     const old = items.find(i => i.id === id);
-    const result = { ...old, ...updated, id } as Unit;
-
-    setDoc(doc(db, 'units', id), result)
-      .then(() => {
-        this.addAuditLog('Alteração de Unidade MV', `Alterou as configurações da Unidade ${id}.`, JSON.stringify(old), JSON.stringify(result));
-      })
-      .catch(err => handleFirestoreError(err, OperationType.UPDATE, `units/${id}`));
-
+    const updatedItems = items.map(i => {
+      if (i.id === id) {
+        return { ...i, ...updated };
+      }
+      return i;
+    });
+    this.set(STORAGE_KEYS.UNITS, updatedItems);
+    const result = updatedItems.find(i => i.id === id)!;
+    this.addAuditLog('Alteração de Unidade MV', `Alterou as configurações da Unidade ${id}.`, JSON.stringify(old), JSON.stringify(result));
     return result;
   }
 
@@ -658,12 +551,9 @@ export class DBService {
     const items = this.getUnits();
     const keyUnit = items.find(i => i.id === id);
     if (!keyUnit) return;
-
-    deleteDoc(doc(db, 'units', id))
-      .then(() => {
-        this.addAuditLog('Remoção de Unidade MV', `Removeu a Unidade ${keyUnit.id} - ${keyUnit.nome}.`, JSON.stringify(keyUnit), '');
-      })
-      .catch(err => handleFirestoreError(err, OperationType.DELETE, `units/${id}`));
+    const filtered = items.filter(i => i.id !== id);
+    this.set(STORAGE_KEYS.UNITS, filtered);
+    this.addAuditLog('Remoção de Unidade MV', `Removeu a Unidade ${keyUnit.id} - ${keyUnit.nome}.`, JSON.stringify(keyUnit), '');
   }
 
   // PROCESSES / PROCESSOS CONTÁBEIS
@@ -673,13 +563,10 @@ export class DBService {
 
   public static saveProcesses(processes: AccountingProcess[]): void {
     this.set(STORAGE_KEYS.PROCESSES, processes);
-    processes.forEach(p => {
-      setDoc(doc(db, 'processes', p.id), p)
-        .catch(err => handleFirestoreError(err, OperationType.WRITE, `processes/${p.id}`));
-    });
   }
 
   public static addProcess(process: Omit<AccountingProcess, 'id' | 'dataCriacao' | 'criadoPor' | 'criadoPorId'>): AccountingProcess {
+    const items = this.getProcesses();
     const current = this.getCurrentUser() || DEFAULT_USERS[0];
     
     const newProcess: AccountingProcess = {
@@ -690,31 +577,30 @@ export class DBService {
       criadoPorId: current.id
     };
     
-    setDoc(doc(db, 'processes', newProcess.id), newProcess)
-      .then(() => {
-        this.addAuditLog('Lançamento de Processo', `Cadastrou o processo SEI ${newProcess.numeroSEI} de Nota Fiscal ${newProcess.notaFiscal} / Fornecedor ID ${newProcess.fornecedorId}. Valor Bruto: R$ ${newProcess.valorNotaFiscal.toFixed(2)}.`, '', JSON.stringify(newProcess));
-      })
-      .catch(err => handleFirestoreError(err, OperationType.CREATE, `processes/${newProcess.id}`));
-
+    items.push(newProcess);
+    this.saveProcesses(items);
+    this.addAuditLog('Lançamento de Processo', `Cadastrou o processo SEI ${newProcess.numeroSEI} de Nota Fiscal ${newProcess.notaFiscal} / Fornecedor ID ${newProcess.fornecedorId}. Valor Bruto: R$ ${newProcess.valorNotaFiscal.toFixed(2)}.`, '', JSON.stringify(newProcess));
     return newProcess;
   }
 
   public static updateProcess(id: string, updatedFields: Partial<Omit<AccountingProcess, 'id' | 'dataCriacao' | 'criadoPor' | 'criadoPorId'>>): AccountingProcess {
     const items = this.getProcesses();
     const old = items.find(i => i.id === id);
-    const result = { 
-      ...old, 
-      ...updatedFields, 
-      id,
-      dataAlteracao: new Date().toISOString() 
-    } as AccountingProcess;
     
-    setDoc(doc(db, 'processes', id), result)
-      .then(() => {
-        this.addAuditLog('Alteração de Processo', `Alterou campos no processo SEI ${result.numeroSEI} (NF: ${result.notaFiscal}).`, JSON.stringify(old), JSON.stringify(result));
-      })
-      .catch(err => handleFirestoreError(err, OperationType.UPDATE, `processes/${id}`));
-
+    const updated = items.map(i => {
+      if (i.id === id) {
+        return { 
+          ...i, 
+          ...updatedFields, 
+          dataAlteracao: new Date().toISOString() 
+        } as AccountingProcess;
+      }
+      return i;
+    });
+    
+    this.saveProcesses(updated);
+    const result = updated.find(i => i.id === id)!;
+    this.addAuditLog('Alteração de Processo', `Alterou campos no processo SEI ${result.numeroSEI} (NF: ${result.notaFiscal}).`, JSON.stringify(old), JSON.stringify(result));
     return result;
   }
 
@@ -722,12 +608,9 @@ export class DBService {
     const items = this.getProcesses();
     const keyProcess = items.find(i => i.id === id);
     if (!keyProcess) return;
-
-    deleteDoc(doc(db, 'processes', id))
-      .then(() => {
-        this.addAuditLog('Remoção de Processo', `Removeu definitivamente o processo SEI ${keyProcess.numeroSEI}, Nota Fiscal: ${keyProcess.notaFiscal}.`, JSON.stringify(keyProcess), '');
-      })
-      .catch(err => handleFirestoreError(err, OperationType.DELETE, `processes/${id}`));
+    const filtered = items.filter(i => i.id !== id);
+    this.saveProcesses(filtered);
+    this.addAuditLog('Remoção de Processo', `Removeu definitivamente o processo SEI ${keyProcess.numeroSEI}, Nota Fiscal: ${keyProcess.notaFiscal}.`, JSON.stringify(keyProcess), '');
   }
 
   // RECEPÇÃO DIÁRIA DE PROCESSOS
@@ -737,16 +620,13 @@ export class DBService {
 
   public static saveDailyProcesses(processes: DailyProcess[]): void {
     this.set(STORAGE_KEYS.DAILY_PROCESSES, processes);
-    processes.forEach(dp => {
-      setDoc(doc(db, 'daily_processes', dp.id), dp)
-        .catch(err => handleFirestoreError(err, OperationType.WRITE, `daily_processes/${dp.id}`));
-    });
   }
 
   public static addDailyProcess(process: Omit<DailyProcess, 'id' | 'dataCriacao' | 'criadoPorId'>): DailyProcess {
     const items = this.getDailyProcesses();
     const current = this.getCurrentUser() || DEFAULT_USERS[0];
 
+    // Validação de duplicidade na recepção diária
     const isDuplicate = items.some(item => item.numeroSEI === process.numeroSEI);
     if (isDuplicate) {
       throw new Error(`Processo SEI ${process.numeroSEI} já está cadastrado nesta lista de recepção diária.`);
@@ -759,17 +639,14 @@ export class DBService {
       criadoPorId: current.id
     };
 
-    setDoc(doc(db, 'daily_processes', newProcess.id), newProcess)
-      .then(() => {
-        this.addAuditLog(
-          'Recepção Diária de Processo',
-          `Registrou entrada diária do processo SEI ${newProcess.numeroSEI}.`,
-          '',
-          JSON.stringify(newProcess)
-        );
-      })
-      .catch(err => handleFirestoreError(err, OperationType.CREATE, `daily_processes/${newProcess.id}`));
-
+    items.push(newProcess);
+    this.saveDailyProcesses(items);
+    this.addAuditLog(
+      'Recepção Diária de Processo',
+      `Registrou entrada diária do processo SEI ${newProcess.numeroSEI}.`,
+      '',
+      JSON.stringify(newProcess)
+    );
     return newProcess;
   }
 
@@ -777,17 +654,14 @@ export class DBService {
     const items = this.getDailyProcesses();
     const keyProcess = items.find(i => i.id === id);
     if (!keyProcess) return;
-
-    deleteDoc(doc(db, 'daily_processes', id))
-      .then(() => {
-        this.addAuditLog(
-          'Remoção de Recepção Diária',
-          `Excluiu o registro de entrada diária do processo SEI ${keyProcess.numeroSEI}.`,
-          JSON.stringify(keyProcess),
-          ''
-        );
-      })
-      .catch(err => handleFirestoreError(err, OperationType.DELETE, `daily_processes/${id}`));
+    const filtered = items.filter(i => i.id !== id);
+    this.saveDailyProcesses(filtered);
+    this.addAuditLog(
+      'Remoção de Recepção Diária',
+      `Excluiu o registro de entrada diária do processo SEI ${keyProcess.numeroSEI}.`,
+      JSON.stringify(keyProcess),
+      ''
+    );
   }
 
   // AUDIT LOGGING
@@ -796,6 +670,7 @@ export class DBService {
   }
 
   public static addAuditLog(operacao: string, detalhes: string, anterior: string = '', novo: string = ''): void {
+    const logs = this.get<AuditLog[]>(STORAGE_KEYS.AUDIT_LOGS, DEFAULT_LOGS);
     const user = this.getCurrentUser() || {
       id: 'sistema',
       nome: 'Sistema / Seeding',
@@ -816,8 +691,13 @@ export class DBService {
       valoresNovos: novo || undefined
     };
 
-    setDoc(doc(db, 'audit_logs', newLog.id), removeUndefinedFields(newLog))
-      .catch(err => handleFirestoreError(err, OperationType.WRITE, `audit_logs/${newLog.id}`));
+    logs.unshift(newLog); // Últimos logs aparecem primeiro
+    
+    // Limita para os últimos 2000 logs no localStorage para evitar overflow de quota
+    if (logs.length > 2000) {
+      logs.splice(2000);
+    }
+    this.set(STORAGE_KEYS.AUDIT_LOGS, logs);
   }
 
   // THEME CONTROL
@@ -832,7 +712,7 @@ export class DBService {
     return newTheme;
   }
 
-  // SYSTEM BACKUP & RESTORE (integrado com Firestore)
+  // SYSTEM BACKUP & RESTORE
   public static exportBackup(): string {
     const backupData = {
       version: '1.0',
@@ -879,14 +759,25 @@ export class DBService {
       const currentUser = this.getCurrentUser();
 
       if (mode === 'overwrite') {
-        // Envia todos os dados importados substituindo individualmente no Firestore
-        importedUsers.forEach(u => setDoc(doc(db, 'users', u.id), u));
-        importedSuppliers.forEach(s => setDoc(doc(db, 'suppliers', s.id), s));
-        importedCostCenters.forEach(cc => setDoc(doc(db, 'cost_centers', cc.id), cc));
-        importedUnits.forEach(un => setDoc(doc(db, 'units', un.id), un));
-        importedProcesses.forEach(p => setDoc(doc(db, 'processes', p.id), p));
-        importedAuditLogs.forEach(al => setDoc(doc(db, 'audit_logs', al.id), al));
-
+        // Complete overwrite: replace all storage keys with the imported values
+        this.set(STORAGE_KEYS.USERS, importedUsers);
+        this.set(STORAGE_KEYS.SUPPLIERS, importedSuppliers);
+        this.set(STORAGE_KEYS.COST_CENTERS, importedCostCenters);
+        this.set(STORAGE_KEYS.UNITS, importedUnits);
+        this.set(STORAGE_KEYS.PROCESSES, importedProcesses);
+        this.set(STORAGE_KEYS.AUDIT_LOGS, importedAuditLogs);
+        
+        // Preserve current user session if still present, otherwise update to the first imported user
+        const currentSessionUser = currentUser;
+        if (currentSessionUser) {
+          const userStillExists = importedUsers.find(u => u.login === currentSessionUser.login || u.id === currentSessionUser.id);
+          if (userStillExists) {
+            this.set(STORAGE_KEYS.CURRENT_USER, userStillExists);
+          } else if (importedUsers.length > 0) {
+            this.set(STORAGE_KEYS.CURRENT_USER, importedUsers[0]);
+          }
+        }
+        
         this.addAuditLog(
           'Restauração de Backup (Sobrescrever)', 
           `O banco de dados foi completamente reiniciado e sobrescrito através de um arquivo de backup por ${currentUser?.nome || 'Analista'}.`
@@ -908,55 +799,65 @@ export class DBService {
         let addedUsers = 0;
         importedUsers.forEach(u => {
           if (!curUsers.some(x => x.id === u.id || x.login === u.login)) {
-            setDoc(doc(db, 'users', u.id), u);
+            curUsers.push(u);
             addedUsers++;
           }
         });
+        this.set(STORAGE_KEYS.USERS, curUsers);
 
         const curSuppliers = this.getSuppliers();
         let addedSuppliers = 0;
         importedSuppliers.forEach(s => {
           if (!curSuppliers.some(x => x.id === s.id || x.cnpj === s.cnpj)) {
-            setDoc(doc(db, 'suppliers', s.id), s);
+            curSuppliers.push(s);
             addedSuppliers++;
           }
         });
+        this.set(STORAGE_KEYS.SUPPLIERS, curSuppliers);
 
         const curCostCenters = this.getCostCenters();
         let addedCostCenters = 0;
         importedCostCenters.forEach(cc => {
           if (!curCostCenters.some(x => x.id === cc.id)) {
-            setDoc(doc(db, 'cost_centers', cc.id), cc);
+            curCostCenters.push(cc);
             addedCostCenters++;
           }
         });
+        this.set(STORAGE_KEYS.COST_CENTERS, curCostCenters);
 
         const curUnits = this.getUnits();
         let addedUnits = 0;
         importedUnits.forEach(un => {
           if (!curUnits.some(x => x.id === un.id)) {
-            setDoc(doc(db, 'units', un.id), un);
+            curUnits.push(un);
             addedUnits++;
           }
         });
+        this.set(STORAGE_KEYS.UNITS, curUnits);
 
         const curProcesses = this.getProcesses();
         let addedProcesses = 0;
         importedProcesses.forEach(p => {
           if (!curProcesses.some(x => x.id === p.id || (x.numeroSEI === p.numeroSEI && x.notaFiscal === p.notaFiscal))) {
-            setDoc(doc(db, 'processes', p.id), p);
+            curProcesses.push(p);
             addedProcesses++;
           }
         });
+        this.set(STORAGE_KEYS.PROCESSES, curProcesses);
 
         const curAuditLogs = this.getAuditLogs();
         let addedAuditLogs = 0;
         importedAuditLogs.forEach(al => {
           if (!curAuditLogs.some(x => x.id === al.id)) {
-            setDoc(doc(db, 'audit_logs', al.id), al);
+            curAuditLogs.push(al);
             addedAuditLogs++;
           }
         });
+        curAuditLogs.sort((a, b) => new Date(b.dataHora).getTime() - new Date(a.dataHora).getTime());
+        if (curAuditLogs.length > 2000) {
+          curAuditLogs.splice(2000);
+        }
+        this.set(STORAGE_KEYS.AUDIT_LOGS, curAuditLogs);
 
         this.addAuditLog(
           'Restauração de Backup (Mesclar)', 
@@ -982,16 +883,15 @@ export class DBService {
 
   public static resetDatabaseToDefault(): void {
     const currentUser = this.getCurrentUser();
+    localStorage.removeItem(STORAGE_KEYS.USERS);
+    localStorage.removeItem(STORAGE_KEYS.SUPPLIERS);
+    localStorage.removeItem(STORAGE_KEYS.COST_CENTERS);
+    localStorage.removeItem(STORAGE_KEYS.UNITS);
+    localStorage.removeItem(STORAGE_KEYS.PROCESSES);
+    localStorage.removeItem(STORAGE_KEYS.AUDIT_LOGS);
     
-    // Deleta os documentos das coleções principais no Firestore
-    this.getUsers().forEach(u => deleteDoc(doc(db, 'users', u.id)));
-    this.getSuppliers().forEach(s => deleteDoc(doc(db, 'suppliers', s.id)));
-    this.getCostCenters().forEach(cc => deleteDoc(doc(db, 'cost_centers', cc.id)));
-    this.getUnits().forEach(un => deleteDoc(doc(db, 'units', un.id)));
-    this.getProcesses().forEach(p => deleteDoc(doc(db, 'processes', p.id)));
-    this.getDailyProcesses().forEach(dp => deleteDoc(doc(db, 'daily_processes', dp.id)));
-    this.getAuditLogs().forEach(al => deleteDoc(doc(db, 'audit_logs', al.id)));
-
+    this.init();
+    
     this.addAuditLog(
       'Reset do Banco de Dados', 
       `O banco de dados foi completamente apagado e redefinido para a base semente padrão por ${currentUser?.nome || 'Administrador'}.`

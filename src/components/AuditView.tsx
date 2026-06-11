@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.5
  */
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { DBService } from '../services/db';
 import { AuditLog } from '../types';
 import { formatarDataHora } from '../utils/validation';
@@ -11,14 +11,6 @@ import { ShieldCheck, Search, Eye, Calendar, User, Info, Terminal } from 'lucide
 
 export default function AuditView() {
   const [logs, setLogs] = useState<AuditLog[]>(() => DBService.getAuditLogs());
-
-  // Real-time synchronization subscription
-  useEffect(() => {
-    const unsubscribe = DBService.subscribe(() => {
-      setLogs(DBService.getAuditLogs());
-    });
-    return unsubscribe;
-  }, []);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
 

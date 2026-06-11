@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { DBService } from '../services/db';
 import { CostCenter, UserProfile } from '../types';
 import { Search, PlusCircle, AlertTriangle, Check, TreeDeciduous, Edit, Trash2 } from 'lucide-react';
@@ -16,14 +16,6 @@ export default function CostCentersView({ currentUserProfile }: CostCentersProps
   const [items, setItems] = useState<CostCenter[]>(() => DBService.getCostCenters());
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('todos'); // 'todos', 'Ativo', 'Inativo'
-
-  // Real-time synchronization subscription
-  useEffect(() => {
-    const unsubscribe = DBService.subscribe(() => {
-      setItems(DBService.getCostCenters());
-    });
-    return unsubscribe;
-  }, []);
   const [showAddForm, setShowAddForm] = useState(false);
   
   // Form fields

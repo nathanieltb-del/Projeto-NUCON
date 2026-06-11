@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { DBService } from '../services/db';
 import { formatarMoeda, formatarCompetencia } from '../utils/validation';
 import { 
@@ -13,16 +13,7 @@ import {
 import { motion } from 'motion/react';
 
 export default function DashboardView() {
-  const [selectedPeriod, setSelectedPeriod] = useState<string>('todos'); // 'todos', 'maio', 'junho'
-  const [trigger, setTrigger] = useState(0);
-
-  // Real-time synchronization subscription
-  useEffect(() => {
-    const unsubscribe = DBService.subscribe(() => {
-      setTrigger(t => t + 1);
-    });
-    return unsubscribe;
-  }, []);
+  const [selectedPeriod, setSelectedPeriod] = useState<string>('todos'); // 'todos', 'maio', 'junho' 
   
   const processes = useMemo(() => {
     const list = DBService.getProcesses();
@@ -33,7 +24,7 @@ export default function DashboardView() {
       return list.filter(p => p.competenciaServico === '2026-06');
     }
     return list;
-  }, [selectedPeriod, trigger]);
+  }, [selectedPeriod]);
 
   // Totais
   const stats = useMemo(() => {

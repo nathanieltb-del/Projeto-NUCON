@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { DBService } from '../services/db';
 import { User, UserProfile } from '../types';
 import { formatarDataHora } from '../utils/validation';
@@ -11,14 +11,6 @@ import { Users, UserPlus, ToggleLeft, ToggleRight, Shield, AlertTriangle, Check,
 
 export default function UsersView() {
   const [users, setUsers] = useState<User[]>(() => DBService.getUsers());
-
-  // Real-time synchronization subscription
-  useEffect(() => {
-    const unsubscribe = DBService.subscribe(() => {
-      setUsers(DBService.getUsers());
-    });
-    return unsubscribe;
-  }, []);
   const [showAddForm, setShowAddForm] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');

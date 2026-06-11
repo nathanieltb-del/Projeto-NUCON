@@ -43,10 +43,6 @@ export default function DailyControlView({ currentUserProfile }: DailyControlVie
   // Load database data
   useEffect(() => {
     loadData();
-    const unsubscribe = DBService.subscribe(() => {
-      loadData();
-    });
-    return unsubscribe;
   }, []);
 
   const loadData = () => {

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { DBService } from '../services/db';
 import { Supplier, TaxConfig, TaxBaseOption, UserProfile } from '../types';
 import { formatarCNPJ, validarCNPJ } from '../utils/validation';
@@ -19,14 +19,6 @@ export default function SuppliersView({ currentUserProfile }: SuppliersProps) {
   const [showForm, setShowForm] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Supplier | null>(null);
-
-  // Real-time synchronization subscription
-  useEffect(() => {
-    const unsubscribe = DBService.subscribe(() => {
-      setSuppliers(DBService.getSuppliers());
-    });
-    return unsubscribe;
-  }, []);
   
   // Form general state
   const [nome, setNome] = useState('');

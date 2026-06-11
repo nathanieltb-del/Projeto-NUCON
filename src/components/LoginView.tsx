@@ -61,7 +61,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
             </div>
           </div>
           <h2 className="mt-5 text-center text-3xl font-bold tracking-tight text-gray-900 dark:text-zinc-50 font-sans">
-            Controle de Processos NUCON
+            Retenções & Custos
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600 dark:text-zinc-400">
             Controle de Processos Contábeis e Retenções Tributárias
